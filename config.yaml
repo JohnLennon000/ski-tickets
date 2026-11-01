@@ -30,33 +30,33 @@ resorts:
     name: Красная Поляна
     airports: [AER]
     nights: [8]            # 8 ночей, как и для Кавказа
-    threshold:
+    threshold: 18000
 
   - id: caucasus
     name: Эльбрус · Домбай · Архыз
     airports: [MRV, NAL]   # можно прилететь в один аэропорт, а улететь из другого
     nights: [8]            # 8 ночей, чтобы успеть на два курорта
-    threshold:
+    threshold: 17000
 
   - id: sheregesh
     name: Шерегеш
     airports: [NOZ, KEJ]
-    threshold:
+    threshold: 26500
 
   - id: khibiny
     name: Хибины
     airports: [KVK, MMK]
-    threshold:
+    threshold: 14500
 
   - id: manzherok
     name: Манжерок
     airports: [RGK]
-    threshold:
+    threshold: 31500
 
   - id: gorny
     name: Горный воздух
     airports: [UUS]
-    threshold:
+    threshold: 33000
 
 # Оценка доплаты за один комплект лыж или сноуборда (до 23 кг),
 # ₽ за перелёт в одну сторону. В кэше Aviasales почти всегда лежит
