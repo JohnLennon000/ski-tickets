@@ -53,8 +53,8 @@ def test_config(cfg):
 
 def test_config_friendly_values(tmp_path):
     text = (ROOT / "config.yaml").read_text(encoding="utf-8")
-    assert "\n    threshold:\n" in text
-    text = text.replace("\n    threshold:\n", "\n    threshold: 16 000 ₽\n", 1)    # первый курорт — Красная Поляна
+    import re
+    text = re.sub(r"\n    threshold:[^\n]*\n", "\n    threshold: 16 000 ₽\n", text, count=1)    # первый курорт — Красная Поляна
     text = text.replace("from: 2027-02-08", "from: 10.02.2027")
     (tmp_path / "config.yaml").write_text(text, encoding="utf-8")
     cfg = load_config(tmp_path / "config.yaml")
