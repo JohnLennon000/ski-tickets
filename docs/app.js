@@ -893,7 +893,11 @@
         const open = btn.getAttribute("aria-expanded") === "true";
         btn.setAttribute("aria-expanded", String(!open));
         detail.hidden = open;
-        history.replaceState(null, "", "#" + resort.id + (open ? "" : "/" + trip.key));
+        try {
+          history.replaceState(null, "", "#" + resort.id + (open ? "" : "/" + trip.key));
+        } catch (err) {
+          /* во встроенном окне адрес менять нельзя — это не мешает */
+        }
         if (!open && !detail.childNodes.length) fillDetail(detail, trip);
       });
       li.append(btn, detail);
