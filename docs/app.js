@@ -446,29 +446,6 @@
 
   function footer() {
     const f = el("footer");
-    f.append(
-      el("p", null, el("b", { text: "Откуда цены. " }),
-        "Из кэша Aviasales: это билеты, которые другие люди находили в поиске за последние дни. Живая цена может отличаться — перед покупкой открывайте «Проверить на Aviasales».")
-    );
-    const bag = DATA.baggage || { default: 0, airlines: {} };
-    const special = Object.entries(bag.airlines || {}).filter(([, fee]) => fee !== bag.default);
-    const groups = {};
-    for (const [code, fee] of special) (groups[fee] = groups[fee] || []).push(airlineName(code));
-    const parts = Object.entries(groups).map(([fee, list]) => list.join(", ") + " ≈" + rub(+fee));
-    parts.push((parts.length ? "остальные" : "все авиакомпании") + " ≈" + rub(bag.default));
-    f.append(
-      el("p", null, el("b", { text: "Багаж. " }),
-        "В кэше почти всегда лежит самый дешёвый тариф — без багажа, поэтому к цене прибавлена оценка доплаты за комплект лыж или сноуборда за каждый перелёт: " + parts.join(", ") + ".")
-    );
-    const lp = (DATA.low_priority || []).map((p) => ddmm(p.from) + "–" + ddmm(p.to) + (p.label ? " (" + p.label + ")" : ""));
-    if (lp.length) {
-      f.append(el("p", null, el("b", { text: "Даты " + lp.join(", ") + ". " }), "Поездки, которые их задевают, показаны серым и не участвуют в уведомлениях."));
-    }
-    const s = DATA.stats || {};
-    f.append(el("p", null, "Проверка каждые 3 часа, уведомления и утренняя сводка — в Telegram. Последняя проверка: " + (s.requests_ok || 0) + " запросов, " + (s.fares || 0) + " цен в кэше."));
-    if (DATA.repo) {
-      f.append(el("p", null, el("a", { href: "https://github.com/" + DATA.repo + "/edit/main/config.yaml", target: "_blank", rel: "noopener", text: "Изменить пороги, даты и курорты" })));
-    }
     appNote = el("p", { class: "app-note", hidden: true });
     f.append(appNote);
     return f;
@@ -742,8 +719,7 @@
     tiles.append(el("div", { class: "tile" },
       el("div", { class: "label", text: "Порог для уведомления" }),
       el("div", { class: "value", text: thr ? rub(thr) : "—" }),
-      el("div", { class: "note" }, thrNote,
-        !thr && DATA.repo ? [" · ", el("a", { href: "https://github.com/" + DATA.repo + "/edit/main/config.yaml", target: "_blank", rel: "noopener", text: "задать" })] : null)));
+      el("div", { class: "note" }, thrNote)));
     nodes.push(tiles);
 
     if (best) {
@@ -793,7 +769,6 @@
     historyPanel.append(
       el("div", { class: "panel-head" }, el("h3", { text: "Как менялась лучшая цена" }), rangeSeg()),
       historyChart,
-      el("p", { class: "hint", text: "Точка — проверка раз в 3 часа. Учитываются только даты вне конференции." }),
       historyTable
     );
     nodes.push(historyPanel);
@@ -952,7 +927,7 @@
     datesPanel.append(
       el("div", { class: "panel-head" }, el("h3", { text: "Цены по дате вылета" })),
       datesChart,
-      el("p", { class: "hint", text: "Серые точки — поездки, которые задевают даты конференции. Нажмите на точку или строку, чтобы увидеть рейсы и историю цены." }),
+      el("p", { class: "hint", text: "Серые точки — даты конференции. Нажмите на точку или строку, чтобы увидеть рейсы." }),
       controls,
       list,
       lowToggle
