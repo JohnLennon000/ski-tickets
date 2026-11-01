@@ -69,7 +69,8 @@ a { color: var(--accent); }
 .wrap {
   max-width: 760px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(48px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 header h1 {
@@ -332,3 +333,33 @@ footer {
   font-size: 0.875rem;
 }
 footer p { margin: 0 0 10px; }
+
+/* --- приложение: установка и уведомления ------------------------------------ */
+.app-panel { margin-top: 18px; }
+.app-panel h3 { margin-bottom: 4px; }
+.app-item { padding: 10px 0 2px; }
+.app-item + .app-item { border-top: 1px solid var(--grid); margin-top: 8px; }
+.app-text { margin: 0; color: var(--ink-2); font-size: 0.9375rem; }
+.app-text b { color: var(--ink); }
+.app-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.app-actions .button { margin-top: 10px; }
+.app-actions .link-btn { padding-top: 8px; }
+button.button { border: 0; font: inherit; font-weight: 600; font-size: 0.9375rem; cursor: pointer; }
+button.button:disabled { opacity: 0.6; cursor: default; }
+.app-error { margin: 10px 0 0; color: var(--ink); font-size: 0.875rem; }
+.manual { margin-top: 10px; font-size: 0.875rem; }
+.manual summary { color: var(--ink-2); cursor: pointer; }
+.sub-json {
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 0.75rem;
+  background: var(--page);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+  max-height: 160px;
+  overflow: auto;
+  user-select: all;
+}
+.app-note { color: var(--ink-2); }
+.app-note .link-btn { padding: 0; font-size: inherit; }

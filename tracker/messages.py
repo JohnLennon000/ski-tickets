@@ -52,13 +52,17 @@ def route_text(trip: Trip, resort: Resort) -> str:
     return f"{airport_name(there)} / {airport_name(back)}"
 
 
-def trip_line(trip: Trip, resort: Resort) -> str:
+def trip_line_plain(trip: Trip, resort: Resort) -> str:
     parts = [f"{day_label(trip.depart)} → {day_label(trip.ret)}, {nights_word(trip.nights)}"]
     route = route_text(trip, resort)
     if route:
         parts.append(route)
     parts.append(airlines_text(trip))
-    return h(" · ".join(parts))
+    return " · ".join(parts)
+
+
+def trip_line(trip: Trip, resort: Resort) -> str:
+    return h(trip_line_plain(trip, resort))
 
 
 def leg_lines(trip: Trip) -> list[str]:
@@ -83,7 +87,7 @@ def leg_lines(trip: Trip) -> list[str]:
     return lines
 
 
-def reasons_text(alert: ResortAlert) -> str:
+def reasons_plain(alert: ResortAlert) -> str:
     texts = []
     for event in alert.events:
         if event.kind == "threshold":
@@ -93,8 +97,15 @@ def reasons_text(alert: ResortAlert) -> str:
         elif event.kind == "drop":
             texts.append(f"−{event.percent:.0f}% за сутки, было {rub(event.prev)}")
     text = "; ".join(texts)
-    icon = "🔔" if alert.has("threshold") else "📉"
-    return f"{icon} {h(text[:1].upper() + text[1:])}"
+    return text[:1].upper() + text[1:]
+
+
+def alert_icon(alert: ResortAlert) -> str:
+    return "🔔" if alert.has("threshold") else "📉"
+
+
+def reasons_text(alert: ResortAlert) -> str:
+    return f"{alert_icon(alert)} {h(reasons_plain(alert))}"
 
 
 def alert_message(alerts: list[ResortAlert], cfg: Config, site_url: str | None) -> str:
@@ -222,3 +233,47 @@ def split_message(text: str, limit: int = 4000) -> list[str]:
     if current:
         parts.append(current)
     return parts
+
+
+# --- пуш-уведомления в приложение: коротко и без разметки --------------------------
+
+def push_alerts(alerts: list[ResortAlert], silent: bool = False) -> list[dict]:
+    return [
+        {
+            "title": f"{alert_icon(a)} {a.resort.name} — {rub(a.trip.total)}",
+            "body": f"{reasons_plain(a)}\n{trip_line_plain(a.trip, a.resort)}",
+            "url": f"./#{a.resort.id}/{a.trip.key}",
+            "tag": f"alert-{a.resort.id}",
+            "silent": silent,
+        }
+        for a in alerts
+    ]
+
+
+def push_digest(
+    cfg: Config,
+    bests: dict[str, Trip | None],
+    history: list[BestRow],
+    now: dt.datetime,
+    *,
+    alerts: list[ResortAlert] | None = None,
+    welcome: bool = False,
+    silent: bool = False,
+) -> dict:
+    marked = {a.resort.id: alert_icon(a) for a in alerts or []}
+    lines = []
+    for resort in cfg.resorts:
+        trip = bests.get(resort.id)
+        if trip is None:
+            lines.append(f"{resort.name}: нет цен")
+            continue
+        change = change_24h(history, resort.id, now, trip.total)
+        delta = f" ↓{num(-change)}" if change and change < 0 else f" ↑{num(change)}" if change else ""
+        mark = f" {marked[resort.id]}" if resort.id in marked else ""
+        lines.append(f"{resort.name} — {rub(trip.total)}{delta}{mark}")
+    title = "✅ Уведомления включены" if welcome else f"☀️ Цены на {human_day(now.astimezone(MSK).date())}"
+    return {"title": title, "body": "\n".join(lines), "url": "./", "tag": "digest", "silent": silent}
+
+
+def push_problem(text: str) -> dict:
+    return {"title": "⚠️ Не получилось проверить цены", "body": text[:300], "url": "./", "tag": "problem"}

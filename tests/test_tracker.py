@@ -242,3 +242,68 @@ def test_end_to_end(tmp_path, capsys, monkeypatch):
     assert "Цены на 3 ноября" in out
     out = run("day1b", "2026-11-03T08:17Z")                    # второй раз за день не шлём
     assert "Цены на" not in out
+
+
+# --- пуш-уведомления в приложение ----------------------------------------------------
+
+def test_push_keys_are_stable(tmp_path):
+    from tracker.push import Push
+
+    a = Push("секрет", tmp_path, None)
+    b = Push("секрет", tmp_path, None)
+    c = Push("другой", tmp_path, None)
+    assert a.public_key == b.public_key != c.public_key
+    import base64
+    raw = base64.urlsafe_b64decode(a.public_key + "==")
+    assert len(raw) == 65 and raw[0] == 4          # несжатая точка P-256 — формат applicationServerKey
+    assert not Push(None, tmp_path, None).enabled
+
+
+def write_device(root, name, endpoint):
+    (root / "push").mkdir(exist_ok=True)
+    (root / "push" / name).write_text(json.dumps({
+        "endpoint": endpoint, "expirationTime": None,
+        "keys": {"p256dh": "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM",
+                 "auth": "tBHItJI5svbpez7KI4CCXg"},
+    }), encoding="utf-8")
+
+
+def test_push_flow(tmp_path, capsys, monkeypatch):
+    from tracker.push import device_id
+
+    for name in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID", "TRAVELPAYOUTS_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PUSH_SECRET", "test-secret")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "user/ski-tickets")
+    root = tmp_path / "project"
+    root.mkdir()
+    shutil.copy(ROOT / "config.yaml", root / "config.yaml")
+    cfg = load_config(root / "config.yaml")
+    write_fixtures(cfg, tmp_path / "a", seed=5)
+    write_fixtures(cfg, tmp_path / "b", seed=5, shift=0.8)
+    endpoint = "https://fcm.googleapis.com/fcm/send/abc123"
+    write_device(root, "phone.json", endpoint)
+    write_device(root, "broken.json", "http://not-https")
+
+    def run(fixtures, now):
+        assert main(["--root", str(root), "--fixtures", str(tmp_path / fixtures), "--dry-run", "--now", now]) == 0
+        return capsys.readouterr().out
+
+    out = run("a", "2026-11-02T05:17Z")
+    assert out.count("----- push") == 1 and "Уведомления включены" in out     # Telegram не настроен — только пуш
+    summary = json.loads((root / "docs/data/summary.json").read_text(encoding="utf-8"))
+    assert summary["push"]["devices"] == [device_id(endpoint)]
+    assert len(summary["push"]["vapid"]) == 87
+
+    out = run("b", "2026-11-02T11:17Z")                                         # подешевело — пуш по курортам
+    assert out.count("----- push") >= 3 and "Новый минимум" in out and "[./#polyana/" in out
+
+    out = run("b", "2026-11-03T05:17Z")                                         # утро — одна сводка
+    assert out.count("----- push") == 1 and "Цены на 3 ноября" in out
+
+    import tracker.main as tm
+    monkeypatch.setattr(tm.Push, "send", lambda self, device, payload: "gone")  # пуш-сервис: подписки больше нет
+    run("b", "2026-11-04T05:17Z")
+    assert not (root / "push" / "phone.json").exists()                          # подписка удалена с телефона — файл убран
+    summary = json.loads((root / "docs/data/summary.json").read_text(encoding="utf-8"))
+    assert summary["push"]["devices"] == []

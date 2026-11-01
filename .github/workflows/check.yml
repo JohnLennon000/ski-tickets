@@ -12,7 +12,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: [config.yaml]
+    paths: [config.yaml, "push/**"]   # новые настройки или подключённый телефон — проверить сразу
 
 permissions:
   contents: write
@@ -41,6 +41,7 @@ jobs:
           TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PUSH_SECRET: ${{ secrets.PUSH_SECRET }}
         run: python -m tracker ${{ inputs.digest && '--force-digest' || '' }}
 
       - name: Сохранить историю цен
@@ -48,7 +49,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/data state
+          for path in docs/data state push; do
+            if [ -e "$path" ]; then git add -A -- "$path"; fi
+          done
           if git diff --cached --quiet; then
             echo "Изменений нет"
             exit 0

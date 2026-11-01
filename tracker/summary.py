@@ -61,6 +61,7 @@ def build_summary(
     now: dt.datetime,
     market: Market,
     repo: str | None,
+    push: dict | None = None,
 ) -> dict:
     resorts = []
     for resort in cfg.resorts:
@@ -101,5 +102,6 @@ def build_summary(
             "fares": market.fares_count(),
         },
         "repo": repo,
+        "push": push,
         "resorts": resorts,
     }

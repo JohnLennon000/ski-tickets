@@ -16,6 +16,8 @@
   const UI = { range: "30", nights: {}, sort: "date", showLow: false };
   let hiders = [];
   let lastWidth = 0;
+  let offline = false;
+  let loadedAt = 0;
 
   // ---------- мелочи ------------------------------------------------------------
   function el(tag, attrs, ...kids) {
@@ -113,6 +115,7 @@
   async function fetchText(url) {
     const resp = await fetch(url + "?v=" + Date.now(), { cache: "no-store" });
     if (!resp.ok) throw new Error(url + ": " + resp.status);
+    if (resp.headers.get("X-Offline")) offline = true;
     return resp.text();
   }
 
@@ -466,6 +469,8 @@
     if (DATA.repo) {
       f.append(el("p", null, el("a", { href: "https://github.com/" + DATA.repo + "/edit/main/config.yaml", target: "_blank", rel: "noopener", text: "Изменить пороги, даты и курорты" })));
     }
+    appNote = el("p", { class: "app-note", hidden: true });
+    f.append(appNote);
     return f;
   }
 
@@ -504,7 +509,198 @@
     document.title = "Билеты на горнолыжку";
     const cards = el("div", { class: "cards" });
     DATA.resorts.forEach((r) => cards.append(resortCard(r)));
-    app.replaceChildren(cards, footer());
+    appPanel = el("section", { class: "panel app-panel", hidden: true, "aria-label": "Приложение и уведомления" });
+    app.replaceChildren(appPanel, cards, footer());
+  }
+
+  // ---------- приложение: установка и пуш-уведомления --------------------------------
+  let appPanel = null;
+  let appNote = null;
+  let installPrompt = null;
+  let pushError = "";
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
+  window.addEventListener("beforeinstallprompt", (ev) => {
+    ev.preventDefault();
+    installPrompt = ev;
+    refreshAppPanel();
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    refreshAppPanel();
+  });
+
+  const isStandalone = () => window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  function getStored(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (err) {
+      return null;
+    }
+  }
+  function setStored(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (err) {
+      /* приватный режим — просто не запоминаем */
+    }
+  }
+
+  function activeRegistration() {
+    if (!("serviceWorker" in navigator)) return Promise.resolve(null);
+    return Promise.race([navigator.serviceWorker.ready, new Promise((resolve) => setTimeout(() => resolve(null), 8000))]);
+  }
+
+  function b64urlToBytes(text) {
+    const padded = text.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (text.length % 4)) % 4);
+    return Uint8Array.from(atob(padded), (c) => c.charCodeAt(0));
+  }
+  function bytesToB64url(buffer) {
+    let binary = "";
+    new Uint8Array(buffer).forEach((b) => (binary += String.fromCharCode(b)));
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  async function deviceId(endpoint) {
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(endpoint));
+    return Array.from(new Uint8Array(hash), (b) => b.toString(16).padStart(2, "0")).join("").slice(0, 12);
+  }
+
+  async function pushState() {
+    const conf = DATA && DATA.push;
+    if (!conf || !conf.vapid || !DATA.repo) return { kind: "off" };
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      return { kind: isIOS() && !isStandalone() ? "ios-install" : "unsupported" };
+    }
+    if (Notification.permission === "denied") return { kind: "denied" };
+    const reg = await activeRegistration();
+    if (!reg) return { kind: "unsupported" };
+    const sub = await reg.pushManager.getSubscription();
+    if (!sub) return { kind: "none" };
+    const id = await deviceId(sub.endpoint);
+    const key = sub.options && sub.options.applicationServerKey ? bytesToB64url(sub.options.applicationServerKey) : conf.vapid;
+    if (key !== conf.vapid) return { kind: "stale", sub: sub, id: id };
+    if ((conf.devices || []).includes(id)) return { kind: "on", sub: sub, id: id };
+    return { kind: "pending", sub: sub, id: id };
+  }
+
+  function githubNewFile(sub, id) {
+    return "https://github.com/" + DATA.repo + "/new/main?filename=" + encodeURIComponent("push/" + id + ".json") +
+      "&value=" + encodeURIComponent(JSON.stringify(sub.toJSON(), null, 2));
+  }
+
+  async function enablePush(button) {
+    button.disabled = true;
+    pushError = "";
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        const reg = await activeRegistration();
+        if (!reg) throw new Error("фоновый обработчик не запустился, обновите страницу");
+        const old = await reg.pushManager.getSubscription();
+        if (old) await old.unsubscribe();
+        await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToBytes(DATA.push.vapid) });
+      }
+    } catch (err) {
+      pushError = "Не получилось включить уведомления: " + (err && err.message ? err.message : String(err));
+    }
+    refreshAppPanel();
+  }
+
+  function appItem(text, ...actions) {
+    return el("div", { class: "app-item" }, el("p", { class: "app-text" }, text), actions.length ? el("div", { class: "app-actions" }, actions) : null);
+  }
+
+  async function refreshAppPanel() {
+    const panel = appPanel;
+    if (!DATA || (!panel && !appNote)) return;
+    const items = [];
+    if (!isStandalone()) {
+      if (installPrompt) {
+        items.push(appItem("Установите приложение: иконка на главном экране, открывается без браузера и без сети.",
+          el("button", {
+            class: "button", type: "button", text: "Установить",
+            onclick: async () => {
+              const prompt = installPrompt;
+              installPrompt = null;
+              prompt.prompt();
+              try { await prompt.userChoice; } catch (err) { /* закрыли окно */ }
+              refreshAppPanel();
+            },
+          })));
+      } else if (isIOS() && getStored("hide-ios-hint") !== "1") {
+        items.push(appItem("Установить на iPhone: в Safari нажмите «Поделиться» (квадрат со стрелкой), затем «На экран „Домой“».",
+          el("button", { class: "link-btn", type: "button", text: "Понятно", onclick: () => { setStored("hide-ios-hint", "1"); refreshAppPanel(); } })));
+      }
+    }
+
+    let state;
+    try {
+      state = await pushState();
+    } catch (err) {
+      state = { kind: "unsupported" };
+    }
+    const note = [];
+    if (state.kind === "none" && getStored("hide-push-offer") === "1") {
+      note.push(el("button", {
+        class: "link-btn", type: "button", text: "Включить уведомления в приложении",
+        onclick: () => { setStored("hide-push-offer", "0"); refreshAppPanel(); },
+      }));
+    } else if (state.kind === "none") {
+      items.push(appItem("Уведомления о ценах прямо на этот телефон: новый минимум, цена ниже порога, утренняя сводка.",
+        el("button", { class: "button", type: "button", text: "Включить уведомления", onclick: (ev) => enablePush(ev.currentTarget) }),
+        el("button", { class: "link-btn", type: "button", text: "Не сейчас", onclick: () => { setStored("hide-push-offer", "1"); refreshAppPanel(); } })));
+    } else if (state.kind === "pending") {
+      const json = JSON.stringify(state.sub.toJSON(), null, 2);
+      const copy = el("button", { class: "link-btn", type: "button", text: "Скопировать" });
+      copy.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(json);
+          copy.textContent = "Скопировано";
+        } catch (err) {
+          copy.textContent = "Выделите текст и скопируйте вручную";
+        }
+      });
+      items.push(el("div", { class: "app-item" },
+        el("p", { class: "app-text" },
+          el("b", { text: "Остался один шаг. " }),
+          "Откроется GitHub с готовым файлом подписки — нажмите «Commit changes». Через пару минут придёт пробное уведомление, а здесь появится галочка."),
+        el("div", { class: "app-actions" },
+          el("a", { class: "button", href: githubNewFile(state.sub, state.id), target: "_blank", rel: "noopener", text: "Открыть GitHub" })),
+        el("details", { class: "manual" },
+          el("summary", { text: "Если файл открылся пустым" }),
+          el("p", { class: "small muted", text: "Создайте в репозитории файл push/" + state.id + ".json и вставьте в него этот текст:" }),
+          el("pre", { class: "sub-json", text: json }),
+          copy)));
+    } else if (state.kind === "stale") {
+      items.push(appItem("Ключ уведомлений сменился — подключите их заново.",
+        el("button", { class: "button", type: "button", text: "Подключить заново", onclick: (ev) => enablePush(ev.currentTarget) })));
+    } else if (state.kind === "ios-install") {
+      items.push(appItem("На iPhone уведомления работают в установленном приложении (iOS 16.4 и новее): добавьте его на экран «Домой» и откройте оттуда."));
+    } else if (state.kind === "denied") {
+      note.push("Уведомления в приложении запрещены — их можно разрешить в настройках телефона или браузера.");
+    } else if (state.kind === "on") {
+      note.push("✓ Уведомления приходят на этот телефон · ",
+        el("button", {
+          class: "link-btn inline", type: "button", text: "отключить",
+          onclick: async () => {
+            try { await state.sub.unsubscribe(); } catch (err) { /* уже отписан */ }
+            refreshAppPanel();
+          },
+        }));
+    }
+    if (pushError) items.push(el("p", { class: "app-error", text: pushError }));
+    if (panel && panel === appPanel) {
+      panel.replaceChildren(el("h3", { text: "Приложение" }), ...items);
+      panel.hidden = !items.length;
+    }
+    if (appNote) {
+      appNote.replaceChildren(...note);
+      appNote.hidden = !note.length;
+    }
   }
 
   // ---------- страница курорта ----------------------------------------------------
@@ -768,14 +964,18 @@
   // ---------- навигация ------------------------------------------------------------
   function route(keepScroll) {
     hiders = [];
+    appPanel = null;
+    appNote = null;
     const parts = decodeURIComponent(location.hash.replace(/^#/, "")).split("/");
     const resort = DATA.resorts.find((r) => r.id === parts[0]);
     if (resort) renderResort(resort, parts.length >= 3 ? parts[1] + "/" + parts[2] : null);
     else renderOverview();
+    refreshAppPanel();
     if (!keepScroll && !(parts.length >= 3)) window.scrollTo(0, 0);
   }
 
-  async function load() {
+  async function loadData() {
+    offline = false;
     let summary;
     try {
       summary = JSON.parse(await fetchText("data/summary.json"));
@@ -784,9 +984,11 @@
       app.replaceChildren(
         el("div", { class: "empty" },
           el("h2", { text: "Данных пока нет" }),
-          el("p", { class: "muted", text: "Первая проверка цен ещё не прошла. Она запускается автоматически каждые 3 часа — загляните чуть позже." }))
+          el("p", { class: "muted", text: navigator.onLine === false
+            ? "Нет сети, а сохранённых цен на телефоне ещё нет. Откройте приложение, когда появится интернет."
+            : "Первая проверка цен ещё не прошла. Она запускается автоматически каждые 3 часа — загляните чуть позже." }))
       );
-      return;
+      return false;
     }
     DATA = summary;
     try {
@@ -802,9 +1004,17 @@
     }
     const updated = parseUtc(DATA.updated);
     updatedEl.replaceChildren("Обновлено " + moment(updated) + " МСК");
-    if (Date.now() - updated > 9 * 3600e3) {
+    if (offline) {
+      updatedEl.append(" · ", el("span", { class: "warn", text: "нет сети, показаны сохранённые цены" }));
+    } else if (Date.now() - updated > 9 * 3600e3) {
       updatedEl.append(" · ", el("span", { class: "warn", text: "давно не обновлялось" }));
     }
+    loadedAt = Date.now();
+    return true;
+  }
+
+  async function load() {
+    if (!(await loadData())) return;
     lastWidth = window.innerWidth;
     route();
     window.addEventListener("hashchange", () => route(false));
@@ -818,6 +1028,12 @@
       }, 200)
     );
     document.addEventListener("pointerdown", (ev) => hiders.forEach((fn) => fn(ev.target)));
+    // Установленное приложение часто просто возвращается из фона — обновим цены.
+    document.addEventListener("visibilitychange", async () => {
+      if (document.visibilityState === "visible" && Date.now() - loadedAt > 3 * 60e3) {
+        if (await loadData()) route(true);
+      }
+    });
   }
 
   load();
