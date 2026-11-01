@@ -29,6 +29,18 @@ def device_id(endpoint: str) -> str:
     return hashlib.sha256(endpoint.encode()).hexdigest()[:12]
 
 
+def contact_claim(contact: str | None) -> str:
+    """Поле sub в подписи VAPID: mailto: или https-адрес без пути (иначе py_vapid отказывается подписывать)."""
+    from urllib.parse import urlsplit
+
+    if contact and contact.startswith("mailto:"):
+        return contact
+    if contact and contact.startswith("https://"):
+        parts = urlsplit(contact)
+        return f"https://{parts.netloc}"
+    return "https://github.com"
+
+
 def derive_key(seed: str):
     from cryptography.hazmat.primitives.asymmetric import ec
 
@@ -53,7 +65,7 @@ class Device:
 class Push:
     def __init__(self, seed: str | None, root: Path, contact: str | None, *, dry_run: bool = False) -> None:
         self.directory = Path(root) / "push"
-        self.contact = contact if contact and contact.startswith(("https://", "mailto:")) else "https://github.com"
+        self.contact = contact_claim(contact)
         self.dry_run = dry_run
         self.outbox: list[dict] = []
         self._key = derive_key(seed) if seed else None

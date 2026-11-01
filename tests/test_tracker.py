@@ -307,3 +307,12 @@ def test_push_flow(tmp_path, capsys, monkeypatch):
     assert not (root / "push" / "phone.json").exists()                          # подписка удалена с телефона — файл убран
     summary = json.loads((root / "docs/data/summary.json").read_text(encoding="utf-8"))
     assert summary["push"]["devices"] == []
+
+
+def test_push_signature_accepts_site_url(tmp_path):
+    from py_vapid import Vapid
+    from tracker.push import Push
+
+    push = Push("секрет", tmp_path, "https://user.github.io/ski-tickets/")
+    assert push.contact == "https://user.github.io"
+    Vapid(private_key=push._key).sign({"sub": push.contact, "aud": "https://fcm.googleapis.com", "exp": 9999999999})
