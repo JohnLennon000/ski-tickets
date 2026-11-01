@@ -234,10 +234,10 @@
     for (const tick of xTicks(x0, x1, opt.kind, pw)) {
       svg.append(sv("text", { x: sx(tick.x), y: H - 7, "text-anchor": "middle" }, tick.label));
     }
-    if (opt.threshold && opt.threshold >= y0 && opt.threshold <= y1) {
+    const showThreshold = opt.threshold && opt.threshold >= y0 && opt.threshold <= y1;
+    if (showThreshold) {
       const y = sy(opt.threshold);
       svg.append(sv("line", { class: "thr", x1: m.l, x2: W - m.r, y1: y, y2: y }));
-      svg.append(sv("text", { class: "lbl", x: W - m.r, y: y - 5, "text-anchor": "end" }, "порог " + num(opt.threshold)));
     }
 
     if (opt.mode === "step") {
@@ -265,6 +265,10 @@
       for (const p of pts) {
         svg.append(sv("circle", { class: "dot" + (p.gray ? " gray" : ""), cx: sx(p.x), cy: sy(p.y), r: 4 }));
       }
+    }
+    if (showThreshold) {
+      // подпись поверх линий, с подложкой цвета фона
+      svg.append(sv("text", { class: "lbl", x: W - m.r, y: sy(opt.threshold) - 5, "text-anchor": "end" }, "порог " + num(opt.threshold)));
     }
     if (opt.mark) {
       const p = opt.mark;
