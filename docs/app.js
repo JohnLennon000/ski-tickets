@@ -444,6 +444,14 @@
     return box;
   }
 
+  function lowHint() {
+    const periods = (DATA.low_priority || []).map((p) => ddmm(p.from) + "–" + ddmm(p.to));
+    const tail = "Нажмите на точку или строку, чтобы увидеть рейсы.";
+    if (!periods.length) return tail;
+    return "Серая полоса — даты вылета, при которых поездка задевает конференцию (" + periods.join(", ") +
+      "): даже если вылет раньше, возвращение придётся на неё. " + tail;
+  }
+
   function footer() {
     const f = el("footer");
     appNote = el("p", { class: "app-note", hidden: true });
@@ -810,7 +818,8 @@
         height: 210,
         threshold: thr,
         xDomain: [start, lastDepart],
-        bands: (DATA.low_priority || []).map((p) => ({ x0: dayMs(p.from) - DAY / 2, x1: dayMs(p.to) + DAY / 2, label: p.label || "без уведомлений" })),
+        // Полоса — все даты вылета, при которых поездка задевает конференцию: от (начало − ночи) до конца.
+        bands: (DATA.low_priority || []).map((p) => ({ x0: dayMs(p.from) - nights * DAY - DAY / 2, x1: dayMs(p.to) + DAY / 2, label: "поездка задевает " + (p.label || "эти даты") })),
         aria: "Цена по дате вылета",
         empty: "Нет цен на прямые рейсы на эти даты.",
         mark: minTrip ? { x: dayMs(minTrip.depart), y: minTrip.total, label: num(minTrip.total) } : null,
@@ -927,7 +936,7 @@
     datesPanel.append(
       el("div", { class: "panel-head" }, el("h3", { text: "Цены по дате вылета" })),
       datesChart,
-      el("p", { class: "hint", text: "Серые точки — даты конференции. Нажмите на точку или строку, чтобы увидеть рейсы." }),
+      el("p", { class: "hint", text: lowHint() }),
       controls,
       list,
       lowToggle
