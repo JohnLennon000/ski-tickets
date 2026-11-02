@@ -456,6 +456,7 @@
     const f = el("footer");
     appNote = el("p", { class: "app-note", hidden: true });
     f.append(appNote);
+    f.append(el("p", null, el("a", { href: "#help", text: "Как установить приложение и как оно работает" })));
     return f;
   }
 
@@ -616,6 +617,10 @@
               refreshAppPanel();
             },
           })));
+      } else if (!isIOS() && getStored("hide-install-hint") !== "1") {
+        items.push(appItem("Установите приложение на главный экран — так оно открывается как обычное и присылает уведомления.",
+          el("a", { class: "button", href: "#help", text: "Как установить" }),
+          el("button", { class: "link-btn", type: "button", text: "Уже установил", onclick: () => { setStored("hide-install-hint", "1"); refreshAppPanel(); } })));
       } else if (isIOS() && getStored("hide-ios-hint") !== "1") {
         items.push(appItem("Установить на iPhone: в Safari нажмите «Поделиться» (квадрат со стрелкой), затем «На экран „Домой“».",
           el("button", { class: "link-btn", type: "button", text: "Понятно", onclick: () => { setStored("hide-ios-hint", "1"); refreshAppPanel(); } })));
@@ -949,6 +954,85 @@
     if (openKey) openRow(openKey, true);
   }
 
+
+  // ---------- инструкция: установка и как всё работает ---------------------------------
+  function platform() {
+    const ua = navigator.userAgent;
+    if (isIOS()) return "ios";
+    if (/Android/i.test(ua)) return /SamsungBrowser/i.test(ua) ? "samsung" : /YaBrowser/i.test(ua) ? "yandex" : "android";
+    if (/Macintosh/i.test(ua) && /Safari/i.test(ua) && !/Chrome|Edg/i.test(ua)) return "mac";
+    return "desktop";
+  }
+
+  function helpSection(id, title, steps, note, open) {
+    return el("details", { class: "help-item", open: open || null },
+      el("summary", { text: title }),
+      el("ol", null, steps.map((s) => el("li", { text: s }))),
+      note ? el("p", { class: "small muted", text: note }) : null);
+  }
+
+  function renderHelp() {
+    document.title = "Как установить — билеты";
+    const current = platform();
+    const sections = [
+      ["android", "Android — Chrome", [
+        "Откройте адрес приложения в Chrome.",
+        "Нажмите «Установить» в панели «Приложение» вверху главной страницы. Если её нет — меню ⋮ → «Установить приложение» (или «Добавить на гл. экран» → «Установить»).",
+        "Подтвердите. Иконка «Горнолыжка» появится на главном экране.",
+        "Открывайте приложение с иконки — оно запускается без адресной строки, как обычное.",
+      ], "Если Chrome пишет «Это приложение нельзя установить», обновите страницу (потяните вниз), подождите пару секунд и попробуйте снова."],
+      ["samsung", "Android — Samsung Internet", [
+        "Откройте адрес в Samsung Internet.",
+        "Нажмите значок «скачать» в адресной строке или меню ☰ → «Добавить страницу на» → «Главный экран».",
+        "Подтвердите «Добавить».",
+      ], "Если что-то не получается — откройте адрес в Chrome, там установка работает надёжнее всего."],
+      ["yandex", "Android — Яндекс Браузер", [
+        "Откройте адрес в Яндекс Браузере.",
+        "Меню ⋮ → «Добавить ярлык» или «Установить приложение».",
+      ], "Яндекс Браузер иногда создаёт обычный ярлык, и уведомления в нём могут не работать. Для уведомлений лучше Chrome."],
+      ["ios", "iPhone и iPad — Safari", [
+        "Откройте адрес именно в Safari (в Chrome на iPhone установить нельзя).",
+        "Нажмите «Поделиться» — квадрат со стрелкой вверх внизу экрана (на iPad — вверху).",
+        "Пролистайте и выберите «На экран „Домой“» → «Добавить».",
+        "Открывайте приложение только с иконки на экране «Домой» — уведомления работают только так.",
+      ], "Уведомления на iPhone и iPad работают с iOS 16.4 и новее."],
+      ["desktop", "Компьютер — Chrome или Edge", [
+        "Откройте адрес в Chrome или Edge.",
+        "Нажмите значок установки справа в адресной строке (монитор со стрелкой) или меню ⋮ → «Установить приложение».",
+        "Приложение откроется в отдельном окне и появится в меню «Пуск» / Launchpad.",
+      ], null],
+      ["mac", "Mac — Safari", [
+        "Откройте адрес в Safari (macOS 14 Sonoma и новее).",
+        "Меню «Файл» → «Добавить в Dock».",
+      ], null],
+    ];
+    const nodes = [
+      el("a", { class: "back", href: "#" }, "← Все курорты"),
+      el("h2", { text: "Как установить" }),
+      el("p", { class: "muted", text: "Это приложение не скачивается из магазина: оно устанавливается прямо из браузера и занимает почти ноль места. Ваше устройство открыто первым." }),
+      el("section", { class: "panel" },
+        sections.slice().sort((a, b) => (a[0] === current ? -1 : b[0] === current ? 1 : 0))
+          .map(([id, title, steps, note]) => helpSection(id, title, steps, note, id === current))),
+      el("h2", { text: "Уведомления" }),
+      el("section", { class: "panel" },
+        el("ol", { class: "help-list" },
+          el("li", { text: "Откройте установленное приложение и нажмите «Включить уведомления», затем разрешите их." }),
+          el("li", { text: "Нажмите «Открыть GitHub» — откроется файл с готовым текстом. Нажмите «Commit changes» и ещё раз «Commit changes»." }),
+          el("li", { text: "Через 1–2 минуты придёт «✅ Уведомления включены». Внизу главной страницы появится «✓ Уведомления приходят на этот телефон»." })),
+        el("p", { class: "small muted", text: "Если GitHub пишет «A file with the same name already exists» — этот телефон уже подключён, нажмите Cancel. Подключить нужно каждое устройство отдельно. Ночью (23:00–8:00) уведомления приходят без звука." })),
+      el("h2", { text: "Как это работает" }),
+      el("section", { class: "panel help-text" },
+        el("p", { text: "Каждые 30 минут сервис проверяет цены на прямые рейсы из Москвы на все курорты и все подходящие даты, считает поездки туда-обратно и сохраняет историю." }),
+        el("p", { text: "Цена указана на 1 взрослого туда-обратно вместе с примерной доплатой за провоз лыж или сноуборда." }),
+        el("p", { text: "Цены берутся из Aviasales: это билеты, которые находили в поиске за последние дни. Живая цена может немного отличаться — перед покупкой нажимайте «Проверить на Aviasales»." }),
+        el("p", { text: "Уведомление приходит, когда лучшая цена по курорту опускается до порога, становится минимальной за всё время или падает на 5% за сутки. Каждое утро после 8:00 — сводка." }),
+        el("p", { text: "Поездки, которые задевают даты конференции, показаны серым и в уведомлениях не участвуют." }),
+        el("p", { text: "Без интернета приложение показывает последние сохранённые цены. Обновления приложения приходят сами — достаточно закрыть его и открыть снова." })),
+      footer(),
+    ];
+    app.replaceChildren(...nodes);
+  }
+
   // ---------- навигация ------------------------------------------------------------
   function route(keepScroll) {
     hiders = [];
@@ -956,7 +1040,8 @@
     appNote = null;
     const parts = decodeURIComponent(location.hash.replace(/^#/, "")).split("/");
     const resort = DATA.resorts.find((r) => r.id === parts[0]);
-    if (resort) renderResort(resort, parts.length >= 3 ? parts[1] + "/" + parts[2] : null);
+    if (parts[0] === "help") renderHelp();
+    else if (resort) renderResort(resort, parts.length >= 3 ? parts[1] + "/" + parts[2] : null);
     else renderOverview();
     refreshAppPanel();
     if (!keepScroll && !(parts.length >= 3)) window.scrollTo(0, 0);
