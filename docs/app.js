@@ -369,8 +369,12 @@
     const ys = series.map((s) => s.total);
     const x0 = Math.min(...xs);
     const x1 = Math.max(...xs);
-    const y0 = Math.min(...ys);
-    const y1 = Math.max(...ys);
+    // Минимальный размах 10% от цены: скачок на 30 ₽ не должен выглядеть как обвал.
+    const lo = Math.min(...ys);
+    const hi = Math.max(...ys);
+    const span = Math.max(hi - lo, hi * 0.1);
+    const y0 = (lo + hi) / 2 - span / 2;
+    const y1 = (lo + hi) / 2 + span / 2;
     const sx = (x) => p + (x1 === x0 ? (W - 2 * p) / 2 : ((x - x0) / (x1 - x0)) * (W - 2 * p));
     const sy = (y) => (y1 === y0 ? H / 2 : p + (1 - (y - y0) / (y1 - y0)) * (H - 2 * p));
     let d = "";
