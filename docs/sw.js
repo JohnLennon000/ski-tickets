@@ -1,7 +1,7 @@
 /* Service worker: приложение открывается без сети и показывает пуш-уведомления. */
 "use strict";
 
-const CACHE = "ski-tickets-v1";
+const CACHE = "ski-tickets-v2";
 const SHELL = [
   "./",
   "index.html",
@@ -44,7 +44,8 @@ self.addEventListener("fetch", (event) => {
 async function networkFirst(request, url) {
   const cache = await caches.open(CACHE);
   const key = url.origin + url.pathname;
-  const network = fetch(request).then((response) => {
+  // no-cache: браузер спрашивает сервер, не изменился ли файл, а не берёт копию 10-минутной давности.
+  const network = fetch(new Request(request, { cache: "no-cache" })).then((response) => {
     if (response.ok) cache.put(key, response.clone());
     return response;
   });
