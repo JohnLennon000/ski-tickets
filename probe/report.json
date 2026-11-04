@@ -1,0 +1,56 @@
+[
+ {
+  "name": "aeroflot",
+  "url": "https://www.aeroflot.ru/ru-ru",
+  "status": 200,
+  "final_url": "https://www.aeroflot.ru/ru-ru",
+  "title": "",
+  "text": "Доступ к сайту временно ограничен владельцем веб-ресурса. Если вы считаете, что произошла ошибка, свяжитесь с владельцем веб-ресурса. Ваш IP-адрес: 95.24.33.129 Ваш ID запроса к ресурсу: e22cecbf23b7f09c60577e819883399a",
+  "seconds": 9.1
+ },
+ {
+  "name": "aeroflot-search",
+  "url": "https://www.aeroflot.ru/sb/app/ru-ru#/search?adults=1&cabin=economy&children=0&infants=0&routes=MOW.20270303.AER-AER.20270311.MOW",
+  "status": 200,
+  "final_url": "https://www.aeroflot.ru/sb/app/ru-ru#/search?adults=1&cabin=economy&children=0&infants=0&routes=MOW.20270303.AER-AER.20270311.MOW",
+  "title": "",
+  "text": "Доступ к сайту временно ограничен владельцем веб-ресурса. Если вы считаете, что произошла ошибка, свяжитесь с владельцем веб-ресурса. Ваш IP-адрес: 95.24.33.129 Ваш ID запроса к ресурсу: a9d5c99458c064c546f29fc482286098",
+  "seconds": 8.4
+ },
+ {
+  "name": "pobeda",
+  "url": "https://www.flypobeda.ru/",
+  "status": 200,
+  "final_url": "https://www.flypobeda.ru/",
+  "title": "Купить авиабилеты онлайн, дешёвые билеты на самолёт - Авиакомпания «Победа»",
+  "text": "Мы используем файлы Cookie. Оставаясь на сайте, вы соглашаетесь с их обработкой в соответствии с Политикой конфиденциальности. МОСКВА Звонок платный 8 (809) 505-8-777 ЧАТ-БОТ ВИТЯ Информация Услуги и сервисы РУС Войти Полетели в Калининград! от 3 499 ₽ Полетели в Санкт-Петербург! от 1 799 ₽ Поиск билета Онлайн-регистрация Управление бронированием АВИАБИЛЕТЫ ОТЕЛИ КВАРТИРЫ ПОСУТОЧНО ТРАНСФЕР ПЕРЕВО",
+  "seconds": 14.7
+ },
+ {
+  "name": "s7",
+  "url": "https://www.s7.ru/",
+  "status": 403,
+  "final_url": "https://www.s7.ru/",
+  "title": "",
+  "text": "Forbidden Datetime: 2026-11-04 12:10:10 +0000 IP: 95.24.33.129 ID: AAQ4eRRj9qM1 Origin: https://www.s7.ru If you are not a bot, please copy the report and send it to our support team. Copy",
+  "seconds": 8.9
+ },
+ {
+  "name": "utair",
+  "url": "https://www.utair.ru/",
+  "status": 401,
+  "final_url": "https://www.utair.ru/",
+  "title": "HTTP 403",
+  "text": "403 Error Forbidden Доступ к сайту www.utair.ru запрещен. Попробуйте зайти на www.utair.ru позже, или обратитесь к администрации сайта. IP: 95.24.33.129 Request: GET L3FyZXJyb3IvNDAzLmh0bWw= Request ID: f4dfeaeb8670a1e289ee4d6e1ea2b820 Guru meditation: a0tGV1FXbzZuV0NHYmJSU2U4bHpYc0V3S1NvMDk4Nzg=",
+  "seconds": 10.6
+ },
+ {
+  "name": "uralairlines",
+  "url": "https://www.uralairlines.ru/",
+  "status": 403,
+  "final_url": "https://www.uralairlines.ru/",
+  "title": "",
+  "text": "Forbidden Transaction ID: d6d40ef8-5256-42d3-bac5-075177a3d581",
+  "seconds": 9.1
+ }
+]
