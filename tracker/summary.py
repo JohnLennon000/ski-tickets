@@ -23,6 +23,8 @@ def _leg(flight: Flight, direction: str, fare: Fare | None) -> dict:
         "price": fare.price if fare else None,
         "bag": fare.bag if fare else None,
         "link": fare.link if fare else None,
+        "found": fare.found.isoformat() if fare and fare.found else None,
+        "luggage": fare.luggage if fare else None,
     }
 
 
@@ -42,7 +44,12 @@ def trip_json(trip: Trip, cfg: Config) -> dict:
         legs = [_leg(out, "out", None), _leg(back, "back", None)]
     else:
         legs = [_leg(trip.out.flights[0], "out", trip.out), _leg(trip.back.flights[0], "back", trip.back)]
+    fares = [trip.rt] if trip.rt else [trip.out, trip.back]
+    found = [f.found for f in fares if f and f.found]
+    luggage = [f.luggage for f in fares if f and f.luggage is not None]
     data.update(
+        found=min(found).isoformat() if found else None,      # самая старая из цен поездки
+        luggage=min(luggage) if luggage and len(luggage) == len(fares) else None,
         price=trip.price,
         bag=trip.bag,
         kind="rt" if trip.rt else "legs",
@@ -62,7 +69,12 @@ def build_summary(
     market: Market,
     repo: str | None,
     push: dict | None = None,
+    checks: list | None = None,
 ) -> dict:
+    from tracker.checks import corrections
+
+    checks = checks or []
+    fixes = corrections(checks)
     resorts = []
     for resort in cfg.resorts:
         s = state.get("resorts", {}).get(resort.id, {})
@@ -84,6 +96,12 @@ def build_summary(
                 else None,
                 "change_24h": change_24h(history, resort.id, now, best.total if best else None),
                 "trips": [trip_json(t, cfg) for t in trips.get(resort.id, [])],
+                "correction": fixes.get(resort.id),
+                "checks": [
+                    {"trip": c.trip, "price": c.price, "app_total": c.app_total, "seen_at": iso_utc(c.seen_at)}
+                    for c in sorted(checks, key=lambda c: c.seen_at, reverse=True)
+                    if c.resort == resort.id
+                ][:20],
             }
         )
     return {

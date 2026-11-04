@@ -47,7 +47,8 @@ def test_config(cfg):
     assert next(r for r in cfg.resorts if r.id == "polyana").nights == (8,)
     assert next(r for r in cfg.resorts if r.id == "sheregesh").nights == (7, 8)
     assert cfg.baggage_fee("DP") == 2500
-    assert cfg.baggage_fee("ZZ") == 2000
+    assert cfg.baggage_fee("ZZ") == 2500
+    assert cfg.night_returns is False
     assert cfg.low_priority[0].start == D(2027, 2, 8) and cfg.low_priority[0].end == D(2027, 2, 21)
 
 
@@ -316,3 +317,47 @@ def test_push_signature_accepts_site_url(tmp_path):
     push = Push("секрет", tmp_path, "https://user.github.io/ski-tickets/")
     assert push.contact == "https://user.github.io"
     Vapid(private_key=push._key).sign({"sub": push.contact, "aud": "https://fcm.googleapis.com", "exp": 9999999999})
+
+
+def test_night_returns_are_skipped(cfg):
+    item = {"origin_airport": "AER", "destination_airport": "SVO", "price": 5000, "airline": "SU",
+            "flight_number": 1, "departure_at": "2027-02-07T01:30:00+03:00", "transfers": 0}
+    from tracker.market import is_night
+    assert is_night(item["departure_at"]) and not is_night("2027-02-07T06:00:00+03:00")
+    rt = {**item, "origin_airport": "SVO", "destination_airport": "AER", "departure_at": "2027-01-30T08:20:00+03:00",
+          "return_at": "2027-02-07T01:30:00+03:00", "return_transfers": 0}
+    assert parse_round_trip(rt, cfg) is None
+    assert parse_round_trip(rt, dataclasses.replace(cfg, night_returns=True)) is not None
+
+
+def test_link_facts_and_stale_filter(cfg):
+    from tracker.market import link_facts
+    link = ("https://www.aviasales.ru/search/MOW1003AER1?t=Y7&search_date=04112026"
+            "&static_fare_key=TY%7CP1%7CH1%7CL0%7CCH1%7CR0%7CTBC0")
+    assert link_facts(link) == (D(2026, 11, 4), 0)
+    assert link_facts("https://x/?static_fare_key=TY%7CL1")[1] == 1
+    item = {"origin_airport": "VKO", "destination_airport": "AER", "price": 5000, "airline": "SU",
+            "departure_at": "2027-03-03T10:00:00+03:00", "transfers": 0, "link": "/search/x?search_date=04112026&static_fare_key=TY%7CL1"}
+    fare = parse_one_way(item, cfg)
+    assert fare.found == D(2026, 11, 4) and fare.bag == 0            # багаж в тарифе — без доплаты
+
+    class Api:
+        def fetch(self, origin, destination, departure_at, return_at=None):
+            return [item] if (origin, destination, departure_at, return_at) == ("MOW", "AER", "2027-03", None) else []
+    from tracker.market import collect
+    assert collect(cfg, Api(), D(2026, 11, 6)).out["AER"]                  # 2 дня — свежая
+    stale = collect(cfg, Api(), D(2026, 11, 9))                            # 5 дней — устарела
+    assert not stale.out["AER"] and stale.stale == 1
+
+
+def test_user_checks_give_correction(tmp_path):
+    from tracker.checks import corrections, load_checks
+    now = dt.datetime(2026, 11, 4, 12, 0, tzinfo=UTC)
+    (tmp_path / "checks").mkdir()
+    for name, price, app in [("a", 30935, 28060), ("b", 31000, 28500), ("c", 90000, 28000), ("old", 50000, 28000)]:
+        seen = "2026-10-01T10:00Z" if name == "old" else "2026-11-04T10:00Z"
+        (tmp_path / "checks" / f"polyana-{name}.json").write_text(json.dumps(
+            {"resort": "polyana", "trip": "2027-01-30/8", "price": price, "app_total": app, "seen_at": seen}))
+    checks = load_checks(tmp_path, now)
+    assert len(checks) == 2                     # опечатка (×3) и старая проверка не учитываются
+    assert corrections(checks) == {"polyana": 2690}

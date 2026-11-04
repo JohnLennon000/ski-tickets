@@ -370,3 +370,12 @@ button.button:disabled { opacity: 0.6; cursor: default; }
 .help-item li, .help-list li { margin: 4px 0; }
 .help-text p { margin: 0 0 10px; }
 .help-text p:last-child { margin-bottom: 0; }
+.check { margin-top: 12px; font-size: 0.9375rem; }
+.check summary { color: var(--accent); cursor: pointer; font-weight: 600; }
+.check-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.check-row input {
+  font: inherit; width: 9em; padding: 8px 10px; border-radius: 10px;
+  border: 1px solid var(--axis); background: var(--surface); color: var(--ink);
+}
+.check-row .button { margin-top: 0; }
+.check-out .button { margin-top: 6px; }

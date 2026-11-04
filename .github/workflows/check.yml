@@ -12,7 +12,7 @@ on:
         default: false
   push:
     branches: [main]
-    paths: [config.yaml, "push/**"]   # новые настройки или подключённый телефон — проверить сразу
+    paths: [config.yaml, "push/**", "checks/**"]   # настройки, подключённый телефон или ваша проверка цены — пересчитать сразу
 
 permissions:
   contents: write

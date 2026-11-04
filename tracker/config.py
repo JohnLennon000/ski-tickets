@@ -61,6 +61,8 @@ class Config:
     baggage_default: int
     baggage_airlines: dict[str, int]
     alerts: AlertSettings
+    night_returns: bool = False   # учитывать ли обратные рейсы с вылетом 0:00–6:00
+    max_price_age_days: int = 3   # цены старше стольких дней (по дате находки в Aviasales) не учитываются
 
     def baggage_fee(self, airline: str) -> int:
         return self.baggage_airlines.get((airline or "").upper(), self.baggage_default)
@@ -228,6 +230,8 @@ def load_config(path: Path) -> Config:
         nights=nights,
         low_priority=low,
         direct_only=bool(raw.get("direct_only", True)),
+        night_returns=bool(raw.get("night_returns", False)),
+        max_price_age_days=int(raw.get("max_price_age_days", 3) or 0),
         resorts=tuple(resorts),
         baggage_default=default_fee,
         baggage_airlines=fees,

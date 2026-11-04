@@ -426,14 +426,22 @@
     for (const leg of trip.legs) {
       const main = names[leg.dir] + ": " + dayLabel(leg.date) + ", " + leg.time + " · " + leg.from + " → " + leg.to;
       const sub = [flightLabel(leg), airportName(leg.from) + " → " + airportName(leg.to)];
-      if (leg.price !== null) sub.push(rub(leg.price) + " + багаж ≈" + num(leg.bag));
+      if (leg.price !== null) sub.push(rub(leg.price) + (leg.bag ? " + багаж ≈" + num(leg.bag) : " · багаж в тарифе"));
       legs.append(el("li", null, el("div", { class: "leg-main", text: main }), el("div", { class: "leg-sub", text: sub.join(" · ") })));
     }
-    const totalText =
-      trip.kind === "rt"
-        ? "Одна бронь туда-обратно: " + rub(trip.price) + " + багаж ≈" + num(trip.bag)
-        : "Билеты " + rub(trip.price) + " + багаж ≈" + num(trip.bag);
+    const bagText = trip.bag ? " + багаж ≈" + num(trip.bag) : " (багаж в тарифе)";
+    const totalText = (trip.kind === "rt" ? "Одна бронь туда-обратно: " : "Билеты ") + rub(trip.price) + bagText;
     legs.append(el("li", null, el("div", { class: "leg-main", text: "Итого " + rub(trip.total) }), el("div", { class: "leg-sub", text: totalText })));
+    if (trip.found) {
+      legs.append(el("li", null, el("div", { class: "leg-sub", text: "Цену видели в поиске Aviasales " + foundText(trip.found) + ". Чем давнее, тем вероятнее, что она изменилась." })));
+    }
+    const mine = (resort.checks || []).filter((c) => c.trip === trip.key);
+    if (mine.length) {
+      const c = mine[0];
+      legs.append(el("li", null,
+        el("div", { class: "leg-main", text: "Вы проверяли: " + rub(c.price) }),
+        el("div", { class: "leg-sub", text: moment(parseUtc(c.seen_at)) + " · приложение тогда показывало " + rub(c.app_total) })));
+    }
     box.append(legs);
 
     const links = el("div", { class: "links" });
@@ -444,8 +452,49 @@
       }
     }
     box.append(links);
+    if (DATA.repo) box.append(checkForm(trip, resort));
     if (trip.low) box.append(el("p", { class: "hint", text: "Поездка задевает даты «" + trip.low + "» — уведомлений по ней нет." }));
     return box;
+  }
+
+  function foundText(iso) {
+    const days = Math.round((dayMs(moscowToday()) - dayMs(iso)) / DAY);
+    if (days <= 0) return "сегодня";
+    if (days === 1) return "вчера";
+    return ddmm(iso) + " (" + days + " " + (days < 5 ? "дня" : "дней") + " назад)";
+  }
+
+  function moscowToday() {
+    return new Date(Date.now() + MSK).toISOString().slice(0, 10);
+  }
+
+  // «Я проверил цену»: пользователь вводит цену с Aviasales, приложение открывает GitHub с готовым файлом.
+  function checkForm(trip, resort) {
+    const wrap = el("details", { class: "check" });
+    const input = el("input", { type: "number", inputmode: "numeric", min: "1000", step: "1", placeholder: "например, 30935", id: "check-" + trip.key.replace(/\W/g, "-") });
+    const out = el("div", { class: "check-out" });
+    const save = el("button", { class: "button", type: "button", text: "Сохранить" });
+    save.addEventListener("click", () => {
+      const price = Math.round(Number(input.value));
+      if (!price || price < 1000) {
+        out.replaceChildren(el("p", { class: "app-error", text: "Введите цену туда-обратно с багажом в рублях, например 30935." }));
+        return;
+      }
+      const now = new Date();
+      const stamp = now.toISOString().slice(0, 16).replace(/[-:T]/g, "");
+      const body = JSON.stringify({ resort: resort.id, trip: trip.key, price: price, app_total: trip.total, seen_at: now.toISOString().slice(0, 16) + "Z" }, null, 2);
+      const href = "https://github.com/" + DATA.repo + "/new/main?filename=" + encodeURIComponent("checks/" + resort.id + "-" + stamp + ".json") + "&value=" + encodeURIComponent(body);
+      const diff = price - trip.total;
+      out.replaceChildren(
+        el("p", { class: "small", text: "Разница с приложением: " + (diff >= 0 ? "+" : "−") + rub(Math.abs(diff)) + ". Последний шаг — сохранить на GitHub: нажмите «Commit changes»." }),
+        el("a", { class: "button", href: href, target: "_blank", rel: "noopener", text: "Открыть GitHub" }));
+    });
+    wrap.append(
+      el("summary", { text: "Я проверил цену на Aviasales" }),
+      el("p", { class: "small muted", text: "Сколько стоит эта поездка туда-обратно с багажом на Aviasales (те же даты, прямые рейсы)? По вашим проверкам приложение поправит цены курорта." }),
+      el("div", { class: "check-row" }, input, el("span", { class: "muted", text: "₽" }), save),
+      out);
+    return wrap;
   }
 
   function lowHint() {
@@ -727,6 +776,13 @@
         el("div", { class: "label", text: "Минимум за всё время" }),
         el("div", { class: "value", text: rub(resort.min_ever.total) }),
         el("div", { class: "note", text: resort.min_ever.time ? "замечен " + moment(parseUtc(resort.min_ever.time)) : "" })));
+    }
+    if (resort.correction) {
+      const fix = resort.correction;
+      tiles.append(el("div", { class: "tile" },
+        el("div", { class: "label", text: "Поправка по вашим проверкам" }),
+        el("div", { class: "value", text: (fix > 0 ? "+" : "−") + rub(Math.abs(fix)) }),
+        el("div", { class: "note", text: best ? "реальная цена ≈ " + rub(best.total + fix) : "по проверкам за 2 недели" })));
     }
     const thr = resort.threshold;
     let thrNote = "уведомлю, когда цена опустится до порога";

@@ -42,6 +42,8 @@ class Fare:
     price: int                      # цена билета
     bag: int                        # оценка доплаты за снаряжение
     link: str
+    found: dt.date | None = None    # когда цену нашли в поиске Aviasales (из ссылки, search_date)
+    luggage: int | None = None      # мест багажа в тарифе (из ссылки, static_fare_key …|L1|…)
 
     @property
     def total(self) -> int:
@@ -59,6 +61,7 @@ class Market:
     rt: dict[str, dict[tuple[dt.date, dt.date], Fare]] = field(default_factory=dict)
     requests_ok: int = 0
     requests_failed: int = 0
+    stale: int = 0                  # цен отброшено как устаревшие
     errors: list[str] = field(default_factory=list)
 
     def fares_count(self) -> int:
@@ -74,6 +77,30 @@ def _int(value: Any) -> int | None:
         return None
 
 
+def link_facts(link: str) -> tuple[dt.date | None, int | None]:
+    """Дата находки цены и багаж в тарифе — Aviasales кладёт их в параметры ссылки на билет."""
+    from urllib.parse import parse_qs, urlsplit
+
+    query = parse_qs(urlsplit(link).query)
+    found = None
+    raw = (query.get("search_date") or [""])[0]
+    if len(raw) == 8 and raw.isdigit():
+        try:
+            found = dt.date(int(raw[4:]), int(raw[2:4]), int(raw[:2]))
+        except ValueError:
+            found = None
+    luggage = None
+    for part in (query.get("static_fare_key") or [""])[0].split("|"):
+        if len(part) >= 2 and part[0] == "L" and part[1:].isdigit():
+            luggage = int(part[1:])
+    return found, luggage
+
+
+def _bag(cfg: Config, airline: str, luggage: int | None) -> int:
+    """Доплата за лыжи: если в тарифе уже есть багаж — не прибавляем."""
+    return 0 if luggage and luggage > 0 else cfg.baggage_fee(airline)
+
+
 def _link(raw: Any) -> str:
     link = str(raw or "")
     return AVIASALES + link if link.startswith("/") else link
@@ -82,6 +109,16 @@ def _link(raw: Any) -> str:
 def _flight_number(airline: str, raw: Any) -> str:
     number = str(raw or "").strip()
     return f"{airline} {number}".strip() if number else ""
+
+
+NIGHT_END_HOUR = 6   # вылет с 0:00 до 6:00 местного времени — ночной
+
+
+def is_night(iso_local: str) -> bool:
+    try:
+        return int(iso_local[11:13]) < NIGHT_END_HOUR
+    except ValueError:
+        return False
 
 
 def parse_one_way(item: dict, cfg: Config) -> Fare | None:
@@ -104,7 +141,9 @@ def parse_one_way(item: dict, cfg: Config) -> Fare | None:
         depart_at=depart_at,
         duration=_int(item.get("duration_to") or item.get("duration")),
     )
-    return Fare("ow", (flight,), price, cfg.baggage_fee(airline), _link(item.get("link")))
+    link = _link(item.get("link"))
+    found, luggage = link_facts(link)
+    return Fare("ow", (flight,), price, _bag(cfg, airline, luggage), link, found, luggage)
 
 
 def parse_round_trip(item: dict, cfg: Config) -> Fare | None:
@@ -122,13 +161,17 @@ def parse_round_trip(item: dict, cfg: Config) -> Fare | None:
         return None
     if price <= 0:
         return None
+    if not cfg.night_returns and is_night(return_at):
+        return None
     airline = str(item.get("airline") or "").upper()
     origin = str(item.get("origin_airport") or item.get("origin") or "")
     dest = str(item.get("destination_airport") or item.get("destination") or "")
     out = Flight(origin, dest, airline, _flight_number(airline, item.get("flight_number")), depart_at,
                  _int(item.get("duration_to")))
     back = Flight(dest, origin, airline, "", return_at, _int(item.get("duration_back")))
-    return Fare("rt", (out, back), price, 2 * cfg.baggage_fee(airline), _link(item.get("link")))
+    link = _link(item.get("link"))
+    found, luggage = link_facts(link)
+    return Fare("rt", (out, back), price, 2 * _bag(cfg, airline, luggage), link, found, luggage)
 
 
 def _better(new: Fare, old: Fare | None) -> bool:
@@ -151,11 +194,21 @@ def round_trip_month_pairs(cfg: Config) -> list[tuple[str, str]]:
     return pairs
 
 
-def collect(cfg: Config, api: PricesSource) -> Market:
+def collect(cfg: Config, api: PricesSource, today: dt.date | None = None) -> Market:
     market = Market()
     months = month_keys(cfg.start, cfg.end)
     pairs = round_trip_month_pairs(cfg)
     valid_nights = {n for r in cfg.resorts for n in r.nights}
+    oldest = today - dt.timedelta(days=cfg.max_price_age_days) if today and cfg.max_price_age_days else None
+
+    def fresh(fare: Fare | None) -> Fare | None:
+        """Цены, которых давно никто не видел в поиске, скорее всего уже ушли — не берём их."""
+        if fare is None or oldest is None or fare.found is None:
+            return fare
+        if fare.found < oldest:
+            market.stale += 1
+            return None
+        return fare
 
     def request(origin: str, destination: str, departure: str, ret: str | None) -> list[dict]:
         try:
@@ -176,16 +229,18 @@ def collect(cfg: Config, api: PricesSource) -> Market:
         rt = market.rt.setdefault(airport, {})
         for month in months:
             for item in request(cfg.origin, airport, month, None):
-                fare = parse_one_way(item, cfg)
+                fare = fresh(parse_one_way(item, cfg))
                 if fare and cfg.start <= fare.date <= cfg.end and _better(fare, out.get(fare.date)):
                     out[fare.date] = fare
             for item in request(airport, cfg.origin, month, None):
-                fare = parse_one_way(item, cfg)
+                fare = fresh(parse_one_way(item, cfg))
+                if fare and not cfg.night_returns and is_night(fare.flights[0].depart_at):
+                    continue
                 if fare and cfg.start <= fare.date <= cfg.end and _better(fare, back.get(fare.date)):
                     back[fare.date] = fare
         for dep_month, ret_month in pairs:
             for item in request(cfg.origin, airport, dep_month, ret_month):
-                fare = parse_round_trip(item, cfg)
+                fare = fresh(parse_round_trip(item, cfg))
                 if not fare:
                     continue
                 first, last = fare.flights[0].date, fare.flights[1].date

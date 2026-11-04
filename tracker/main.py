@@ -12,6 +12,7 @@ from pathlib import Path
 from tracker.alerts import ResortAlert, evaluate
 from tracker.api import AuthError, FixtureApi, PricesApi
 from tracker.chart import digest_chart
+from tracker.checks import load_checks
 from tracker.config import Config, ConfigError, load_config
 from tracker.market import collect
 from tracker.messages import (
@@ -32,6 +33,9 @@ from tracker.util import MSK, human_day, iso_utc, parse_utc
 log = logging.getLogger("tracker")
 
 PROBLEM_REPEAT = dt.timedelta(hours=12)
+# Меняется, когда меняется способ расчёта цены (багаж, отбор рейсов): старые минимумы и пороги
+# посчитаны иначе, их нужно забыть, иначе будут ложные «минимум был …».
+METHOD = 3
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:
@@ -239,13 +243,13 @@ def main(argv: list[str] | None = None) -> int:
         api = PricesApi(token, direct=cfg.direct_only, dump_dir=Path(args.dump) if args.dump else None)
 
     try:
-        market = collect(cfg, api)
+        market = collect(cfg, api, now.astimezone(MSK).date())
     except AuthError as exc:
         return fail(str(exc))
 
     log.info(
-        "Запросов: %d успешно, %d с ошибкой; цен в кэше: %d",
-        market.requests_ok, market.requests_failed, market.fares_count(),
+        "Запросов: %d успешно, %d с ошибкой; цен в кэше: %d; устаревших отброшено: %d",
+        market.requests_ok, market.requests_failed, market.fares_count(), market.stale,
     )
     if market.requests_ok == 0:
         state["failures"] = state.get("failures", 0) + 1
@@ -255,6 +259,11 @@ def main(argv: list[str] | None = None) -> int:
         store.save_state(state)
         return 0
     state["failures"] = 0
+
+    if state.get("method") != METHOD:
+        state.pop("resorts", None)
+        state["method"] = METHOD
+        log.info("Способ расчёта цены изменился — запомненные минимумы сброшены")
 
     trips = build_trips(cfg, market)
     bests = {r.id: best_trip(trips[r.id]) for r in cfg.resorts}
@@ -279,7 +288,8 @@ def main(argv: list[str] | None = None) -> int:
 
     push_info = {"vapid": push.public_key, "devices": state.get("push", {}).get("known", [])} if push.enabled else None
     store.write_summary(
-        build_summary(cfg, trips, bests, state, history, now, market, os.environ.get("GITHUB_REPOSITORY"), push_info)
+        build_summary(cfg, trips, bests, state, history, now, market, os.environ.get("GITHUB_REPOSITORY"), push_info,
+                      load_checks(root, now))
     )
     store.save_state(state)
 
