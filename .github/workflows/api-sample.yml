@@ -1,0 +1,28 @@
+name: Образцы ответов API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - env:
+          TRAVELPAYOUTS_TOKEN: ${{ secrets.TRAVELPAYOUTS_TOKEN }}
+        run: python tools/api_sample.py probe/api
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A probe
+          git diff --cached --quiet && exit 0
+          git commit -q -m "Образцы ответов API"
+          for a in 1 2 3; do git push -q origin HEAD:main && exit 0; git fetch -q --depth=50 origin main; git rebase -q origin/main || exit 1; done
