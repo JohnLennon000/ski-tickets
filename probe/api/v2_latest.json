@@ -1,0 +1,85 @@
+{
+ "status": 200,
+ "body": {
+  "currency": "rub",
+  "error": "",
+  "data": [
+   {
+    "depart_date": "2027-03-20",
+    "origin": "MOW",
+    "destination": "AER",
+    "gate": "Авиасейлс",
+    "return_date": "",
+    "found_at": "2026-11-04T00:09:20",
+    "trip_class": 0,
+    "value": 7422,
+    "number_of_changes": 2,
+    "duration": 2835,
+    "distance": 1364,
+    "show_to_affiliates": true,
+    "actual": true
+   },
+   {
+    "depart_date": "2027-03-10",
+    "origin": "MOW",
+    "destination": "AER",
+    "gate": "Авиасейлс",
+    "return_date": "",
+    "found_at": "2026-11-04T12:10:08",
+    "trip_class": 0,
+    "value": 7582,
+    "number_of_changes": 0,
+    "duration": 230,
+    "distance": 1338,
+    "show_to_affiliates": true,
+    "actual": true
+   },
+   {
+    "depart_date": "2027-03-21",
+    "origin": "MOW",
+    "destination": "AER",
+    "gate": "Авиасейлс",
+    "return_date": "",
+    "found_at": "2026-11-04T03:41:45",
+    "trip_class": 0,
+    "value": 7597,
+    "number_of_changes": 0,
+    "duration": 225,
+    "distance": 1338,
+    "show_to_affiliates": true,
+    "actual": true
+   },
+   {
+    "depart_date": "2027-03-24",
+    "origin": "MOW",
+    "destination": "AER",
+    "gate": "Авиасейлс",
+    "return_date": "",
+    "found_at": "2026-11-04T07:36:22",
+    "trip_class": 0,
+    "value": 7608,
+    "number_of_changes": 0,
+    "duration": 230,
+    "distance": 1338,
+    "show_to_affiliates": true,
+    "actual": true
+   },
+   {
+    "depart_date": "2027-03-03",
+    "origin": "MOW",
+    "destination": "AER",
+    "gate": "Kupi.com",
+    "return_date": "",
+    "found_at": "2026-11-04T06:39:51",
+    "trip_class": 0,
+    "value": 7617,
+    "number_of_changes": 0,
+    "duration": 230,
+    "distance": 1338,
+    "show_to_affiliates": true,
+    "actual": true
+   }
+  ],
+  "success": true
+ }
+}
