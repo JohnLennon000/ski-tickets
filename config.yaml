@@ -34,18 +34,18 @@ resorts:
 
   - id: caucasus
     name: Эльбрус · Домбай · Архыз
-    airports: [MRV, NAL]   # можно прилететь в один аэропорт, а улететь из другого
+    airports: [MRV]        # Минеральные Воды
     nights: [8]            # 8 ночей, чтобы успеть на два курорта
     threshold: 17000
 
   - id: sheregesh
     name: Шерегеш
-    airports: [NOZ, KEJ]
+    airports: [NOZ]        # Новокузнецк
     threshold: 26500
 
   - id: khibiny
     name: Хибины
-    airports: [KVK, MMK]
+    airports: [KVK]        # Апатиты
     threshold: 14500
 
   - id: manzherok

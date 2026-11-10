@@ -35,7 +35,7 @@ log = logging.getLogger("tracker")
 PROBLEM_REPEAT = dt.timedelta(hours=12)
 # Меняется, когда меняется способ расчёта цены (багаж, отбор рейсов): старые минимумы и пороги
 # посчитаны иначе, их нужно забыть, иначе будут ложные «минимум был …».
-METHOD = 3
+METHOD = 4  # 4: по одному аэропорту на курорт (без Нальчика, Кемерово, Мурманска)
 
 
 def parse_args(argv: list[str] | None) -> argparse.Namespace:

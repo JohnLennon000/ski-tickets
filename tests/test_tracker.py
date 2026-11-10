@@ -43,7 +43,7 @@ def test_config(cfg):
     assert (cfg.start, cfg.end) == (D(2027, 1, 30), D(2027, 3, 14))
     caucasus = next(r for r in cfg.resorts if r.id == "caucasus")
     assert caucasus.nights == (8,)
-    assert caucasus.airports == ("MRV", "NAL")
+    assert caucasus.airports == ("MRV",)
     assert next(r for r in cfg.resorts if r.id == "polyana").nights == (8,)
     assert next(r for r in cfg.resorts if r.id == "sheregesh").nights == (7, 8)
     assert cfg.baggage_fee("DP") == 2500
@@ -89,6 +89,9 @@ def test_trip_dates(cfg):
 
 
 def test_open_jaw_and_round_trip(cfg):
+    # Прилёт в один аэропорт курорта и вылет из другого — проверяем на курорте с двумя аэропортами.
+    cfg = dataclasses.replace(cfg, resorts=tuple(
+        dataclasses.replace(r, airports=("MRV", "NAL")) if r.id == "caucasus" else r for r in cfg.resorts))
     market = Market()
     market.out["MRV"] = {D(2027, 1, 30): ow("SVO", "MRV", D(2027, 1, 30), 6000, "DP", bag=2500)}
     market.back["MRV"] = {D(2027, 2, 7): ow("MRV", "SVO", D(2027, 2, 7), 6000)}
