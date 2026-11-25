@@ -27,6 +27,8 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: actions/setup-python@v6
         with:
@@ -60,6 +62,6 @@ jobs:
           for attempt in 1 2 3; do
             if git push -q origin HEAD:main; then exit 0; fi
             git fetch -q --depth=50 origin main
-            git rebase -q origin/main || { git rebase --abort; exit 1; }
+            git rebase -q -X theirs origin/main || { git rebase --abort; exit 1; }
           done
           exit 1
